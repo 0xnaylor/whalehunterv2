@@ -3,53 +3,34 @@ import config from '../config.js'
 import { PROJECT_ID, MAINNET_URL, ROPSTEN_URL, UNI_V2_ROUTER_ADDR, UNI_V2_FACTORY_ADDR } from '../constants.js'
 import { logger } from './utils.js'
 import UniSwapV2Factory from '@uniswap/v2-core/build/UniswapV2Factory.json' assert {type: "json"}
-import UniSwapV2Router from '@uniswap/swap-router-contracts/artifacts/contracts/V2SwapRouter.sol/V2SwapRouter.json' assert {type: "json"}
 import UniswapV2ERC20 from '@uniswap/v2-core/build/UniswapV2ERC20.json' assert {type: "json"}
 
 export function getV2Router(chainId) {
 
     const recipientAccount  = getRecipientAccount(chainId);
-
     return new ethers.Contract(
         UNI_V2_ROUTER_ADDR,
-        UniSwapV2Router.abi,
+        [
+            'function swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) external payable returns (uint[] memory amounts)',
+            'function swapExactTokensForETH(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)',
+        ],
         recipientAccount
     ); 
-
-    // return new ethers.Contract(
-    //     UNI_V2_ROUTER_ADDR,
-    //     [
-    //         'function getAmountsOut(uint amountIn, address[] memory path) public view returns (uint[] memory amounts)',
-    //         'function swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) external payable returns (uint[] memory amounts)',
-    //         'function swapExactTokensForETH(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)',
-    //     ],
-    //     recipientAccount
-    // ); 
 }
 
 export function getV2Factory(chainId) {
 
     const recipientAccount  = getRecipientAccount(chainId);
-
     return new ethers.Contract(
         UNI_V2_FACTORY_ADDR,
         UniSwapV2Factory.abi,
         recipientAccount
     ); 
-
-    // return new ethers.Contract(
-    //     UNI_V2_FACTORY_ADDR,
-    //     [
-    //         'function getPair(address tokenA, address tokenB) external view returns (address pair)',
-    //     ],
-    //     recipientAccount
-    // ); 
 }
 
 export function getPairContract(chainId, pairAddress) {
 
     const recipientAccount  = getRecipientAccount(chainId);
-
     return new ethers.Contract(
         pairAddress,
         [
@@ -59,40 +40,19 @@ export function getPairContract(chainId, pairAddress) {
         ],
         recipientAccount
       )
-
-    // return new ethers.Contract(
-    //     UNI_V2_FACTORY_ADDR,
-    //     [
-    //         'function getPair(address tokenA, address tokenB) external view returns (address pair)',
-    //     ],
-    //     recipientAccount
-    // ); 
 }
 
 export function getERC20Contract(chainId, tokenAddress) {
 
     const recipientAccount  = getRecipientAccount(chainId);
-
     return new ethers.Contract(
         tokenAddress,
         UniswapV2ERC20.abi,
         recipientAccount
       )
-
-    // return new ethers.Contract(
-    //     UNI_V2_FACTORY_ADDR,
-    //     [
-    //         'function getPair(address tokenA, address tokenB) external view returns (address pair)',
-    //     ],
-    //     recipientAccount
-    // ); 
 }
 
-
-
-
-
-function getRecipientAccount(chainId) {
+export function getRecipientAccount(chainId) {
 
     let provider, wallet
 

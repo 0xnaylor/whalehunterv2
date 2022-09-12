@@ -2,7 +2,8 @@ import { ChainId, Fetcher, Token, WETH, Pair, TokenAmount, Route, Trade, TradeTy
 import { ethers } from "ethers";
 import { PROJECT_ID, MAINNET_URL, ROPSTEN_URL } from './constants.js';
 import { logger, extractPairAddress, initEnvironment, currencyFormatter, getCurrentEthPrice } from './utils/utils.js';
-import { getPairContract, getERC20Contract } from './utils/contracts.js'
+import { getPairContract, getERC20Contract, getRecipientAccount, getV2Router } from './utils/contracts.js'
+import config from './config.js'
 import * as dotenv from 'dotenv'
 dotenv.config()
 
@@ -46,8 +47,6 @@ async function main() {
   logger.info(`token0: ${token0Name} (${token0Symbol})`)
   logger.info(`token1: ${token1Name} (${token1Symbol})`)
   
-  
-
   // define Token objects for use with SDK
   const token0 = new Token(chainId, token0Addr, token0Decimals, token0Symbol, token0Name)
   const token1 = new Token(chainId, token1Addr, token1Decimals, token1Symbol, token1Name)
@@ -65,37 +64,44 @@ async function main() {
   // create pair object for use with SDK
   const pair = await Fetcher.fetchPairData(altcoin, WETH[chainId])
 
-  // create route
+  // // create route
   const route = new Route([pair], WETH[chainId]) // 2nd argument is the input token
   ethUsdPrice = await getCurrentEthPrice()
 
-  
   logger.info(`Pair: WETH/${altcoin.symbol}`)
+  logger.info(`Mid price - Pre trade quote based on current pool reserves`)
   logger.info(`1 ${WETH[chainId].symbol} = ${route.midPrice.toSignificant(6)} ${altcoin.symbol}`)
   logger.info(`1 ${altcoin.symbol} = ${route.midPrice.invert().toSignificant(6)} ${WETH[chainId].symbol}`)
   logger.info(`Fiat exchange rates:`)
   logger.info(`1 ${altcoin.symbol} = ${currencyFormatter.format(route.midPrice.invert().toSignificant(6) * ethUsdPrice)}`)
   logger.info(`1 ${WETH[chainId].symbol} = ${currencyFormatter.format(ethUsdPrice)}`)
 
+  logger.info(`Execution price - The actual execution price we will get based on the current pool reserves`)
 
+  // set up trade parameters
+  const amountIn = ethers.utils.parseEther(config.ETH_TRADE_AMOUNT)
+  const trade = new Trade(route, new TokenAmount(WETH[chainId], amountIn), TradeType.EXACT_INPUT)
+  const slippageTolerance = new Percent(config.SLIPPAGE_PERCENTAGE*100, '10000')
+  const amountOutMin = trade.minimumAmountOut(slippageTolerance).raw
+  const amountOutMinHex = ethers.BigNumber.from(amountOutMin.toString()).toHexString();
+  const path = [WETH[chainId].address, altcoin.address]
+  const to = getRecipientAccount(chainId).address
+  const deadline = Math.floor(Date.now() / 1000) + 60 * 20 // 20 mins from current Unix time
+  const tradeValue = trade.inputAmount.raw
+  const tradeValueHex = ethers.BigNumber.from(tradeValue.toString()).toHexString();
+  const currentGasPrice = await provider.getGasPrice()
+  const txGasPrice = currentGasPrice.add(50000000000) // add 50 gwei
 
-//   const trade = new Trade(route, new TokenAmount(WETH[DAI.chainId], '1000000000000000000'), TradeType.EXACT_INPUT)
-//   console.log(`executionPrice: ${trade.executionPrice.toSignificant(6)}`)
-//   console.log(`nextMidPrice: ${trade.nextMidPrice.toSignificant(6)}`) // if trades completed before the reserves changed
-//   buy(trade, DAI)
+  // execute our trade
+  if (txGasPrice <= config.GAS_PRICE_LIMIT) {
+    const router = getV2Router(chainId)
+    const options = { gasPrice: txGasPrice, gasLimit: config.GAS_LIMIT, value: tradeValueHex }
+    const tx = await router.swapExactETHForTokens(amountOutMinHex, path, to, deadline, options)
+    const receipt = await tx.wait();
+    console.log(`receipt: ${JSON.stringify(receipt)}`)
+  }
 }
 
-// function buy(trade, DAI){ 
-//   const slippageTolerance = new Percent('50', '10000') // 50 bips or 0.5%
-//   const amountOutMin = trade.minimumAmountOut(slippageTolerance).raw // needs to be converted to hex
-//   const path = [WETH[DAI.chainId].address, DAI.address]
-//   const to = '' // should be a checksummed recipient address
-//   const deadline = Math.floor(Date.now() / 1000) + 60 * 20 // 20 minutes from the current Unix time
-//   // The value is the amount of ETH that must be included as the msg.value in our transaction.
-//   const value = trade.inputAmount.raw // // needs to be converted to e.g. hex
-// }
 
 main();
-
-
 
