@@ -3,6 +3,7 @@ import { ethers } from "ethers";
 import CoinGecko from 'coingecko-api'
 import { createLogger, format, transports } from 'winston';
 import { PROJECT_ID, MAINNET_URL, ROPSTEN_URL } from '../constants.js';
+import { getERC20Contract } from './contracts.js';
 
 const { combine, timestamp, label, printf } = format;
 const CoinGeckoClient = new CoinGecko()
@@ -62,4 +63,12 @@ export const currencyFormatter = new Intl.NumberFormat('en-US', { style: 'curren
 export async function getCurrentEthPrice() {
     const result = await CoinGeckoClient.coins.fetch('ethereum', {})
     return result.data.market_data.current_price["usd"] 
+}
+
+export async function getTokenDetails(chainId, tokenAddress) {
+    const tokenContract = getERC20Contract(chainId, tokenAddress);
+    const tokenSymbol = await tokenContract.symbol();
+    const tokenName = await tokenContract.name();
+    const tokenDecimals = await tokenContract.decimals();
+    return [ tokenName, tokenSymbol, tokenDecimals ];
 }

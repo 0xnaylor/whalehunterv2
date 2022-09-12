@@ -1,8 +1,8 @@
-import { ChainId, Fetcher, Token, WETH, Pair, TokenAmount, Route, Trade, TradeType, Percent } from '@uniswap/sdk';
+import { Fetcher, Token, WETH, TokenAmount, Route, Trade, TradeType, Percent } from '@uniswap/sdk';
 import { ethers } from "ethers";
-import { PROJECT_ID, MAINNET_URL, ROPSTEN_URL } from './constants.js';
-import { logger, extractPairAddress, initEnvironment, currencyFormatter, getCurrentEthPrice } from './utils/utils.js';
-import { getPairContract, getERC20Contract, getRecipientAccount, getV2Router } from './utils/contracts.js'
+import { logger, extractPairAddress, initEnvironment, currencyFormatter, getCurrentEthPrice, getTokenDetails } from './utils/utils.js';
+import { getPairContract, getRecipientAccount } from './utils/contracts.js'
+import { buy } from './transactions.js';
 import config from './config.js'
 import * as dotenv from 'dotenv'
 dotenv.config()
@@ -17,10 +17,11 @@ async function main() {
   logger.info(`================ Starting Run ================`)
 
   const myArgs = process.argv.slice(2);  
-  let provider, tokenAddress, chainId
+  let provider, chainId
+  
   
   // set provider and chainId
-  ({ provider, tokenAddress, chainId } = initEnvironment(myArgs));
+  ({ provider, chainId } = initEnvironment(myArgs));
 
   logger.info(`================ Pair Info ================`)
 
@@ -28,25 +29,16 @@ async function main() {
   pairAddress = extractPairAddress(url)
   logger.info(`Uniswap pair address: ${pairAddress}`)
 
-  // create pair contract and retrieve token addresses
+  // retrieve token addresses from pair contract token addresses
   pairContract = getPairContract(chainId, pairAddress)
   const token0Addr = await pairContract.token0()
   const token1Addr = await pairContract.token1()
 
-  // create token contract objects from addresses and get token names and symbols.
-  const token0Contract = getERC20Contract(chainId, token0Addr)
-  const token0Symbol = await token0Contract.symbol()
-  const token0Name = await token0Contract.name()
-  const token0Decimals = await token0Contract.decimals()
-
-  const token1Contract = getERC20Contract(chainId, token1Addr)
-  const token1Symbol = await token1Contract.symbol()
-  const token1Name = await token1Contract.name()
-  const token1Decimals = await token1Contract.decimals()
-
-  logger.info(`token0: ${token0Name} (${token0Symbol})`)
-  logger.info(`token1: ${token1Name} (${token1Symbol})`)
+  // create token contract objects from addresses and get token names and symbols
+  const [ token0Name, token0Symbol, token0Decimals ] = await getTokenDetails(chainId, token0Addr);
+  const [ token1Name, token1Symbol, token1Decimals ] = await getTokenDetails(chainId, token1Addr);
   
+  // Now we use the pair and token information from above to create the objects we need to use the SDK
   // define Token objects for use with SDK
   const token0 = new Token(chainId, token0Addr, token0Decimals, token0Symbol, token0Name)
   const token1 = new Token(chainId, token1Addr, token1Decimals, token1Symbol, token1Name)
@@ -61,23 +53,18 @@ async function main() {
     return;
   } 
 
-  // create pair object for use with SDK
-  const pair = await Fetcher.fetchPairData(altcoin, WETH[chainId])
-
-  // // create route
-  const route = new Route([pair], WETH[chainId]) // 2nd argument is the input token
   ethUsdPrice = await getCurrentEthPrice()
-
+  const pair = await Fetcher.fetchPairData(altcoin, WETH[chainId])
+  const route = new Route([pair], WETH[chainId]) // 2nd argument is the input token
+  
   logger.info(`Pair: WETH/${altcoin.symbol}`)
   logger.info(`Mid price - Pre trade quote based on current pool reserves`)
   logger.info(`1 ${WETH[chainId].symbol} = ${route.midPrice.toSignificant(6)} ${altcoin.symbol}`)
   logger.info(`1 ${altcoin.symbol} = ${route.midPrice.invert().toSignificant(6)} ${WETH[chainId].symbol}`)
   logger.info(`Fiat exchange rates:`)
-  logger.info(`1 ${altcoin.symbol} = ${currencyFormatter.format(route.midPrice.invert().toSignificant(6) * ethUsdPrice)}`)
   logger.info(`1 ${WETH[chainId].symbol} = ${currencyFormatter.format(ethUsdPrice)}`)
-
-  logger.info(`Execution price - The actual execution price we will get based on the current pool reserves`)
-
+  logger.info(`1 ${altcoin.symbol} = ${currencyFormatter.format(route.midPrice.invert().toSignificant(6) * ethUsdPrice)}`)
+  
   // set up trade parameters
   const amountIn = ethers.utils.parseEther(config.ETH_TRADE_AMOUNT)
   const trade = new Trade(route, new TokenAmount(WETH[chainId], amountIn), TradeType.EXACT_INPUT)
@@ -92,15 +79,16 @@ async function main() {
   const currentGasPrice = await provider.getGasPrice()
   const txGasPrice = currentGasPrice.add(50000000000) // add 50 gwei
 
+  logger.info(`Execution Price: ${currencyFormatter.format(trade.executionPrice.invert().toSignificant(6)*ethUsdPrice)} per UNI`); // uni per wrapped eth
+  logger.info("Price Impact: " + trade.priceImpact.toSignificant(6) + "%");
+
   // execute our trade
-  if (txGasPrice <= config.GAS_PRICE_LIMIT) {
-    const router = getV2Router(chainId)
-    const options = { gasPrice: txGasPrice, gasLimit: config.GAS_LIMIT, value: tradeValueHex }
-    const tx = await router.swapExactETHForTokens(amountOutMinHex, path, to, deadline, options)
-    const receipt = await tx.wait();
-    console.log(`receipt: ${JSON.stringify(receipt)}`)
-  }
+  await buy(txGasPrice, chainId, tradeValueHex, amountOutMinHex, path, to, deadline);
+
 }
+
+
+
 
 
 main();

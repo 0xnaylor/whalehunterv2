@@ -1,0 +1,8 @@
+2022-09-12T20:59:01.279Z [whale_hunter_v2] error: uncaughtException: (intermediate value) is not iterable
+TypeError: (intermediate value) is not iterable
+    at main (file:///Users/bennaylor/Development/Github/WhaleHunterv2/index.js:38:56)
+    at processTicksAndRejections (node:internal/process/task_queues:96:5)
+2022-09-12T21:04:39.281Z [whale_hunter_v2] error: uncaughtException: Cannot access 'trade' before initialization
+ReferenceError: Cannot access 'trade' before initialization
+    at main (file:///Users/bennaylor/Development/Github/WhaleHunterv2/index.js:68:38)
+    at processTicksAndRejections (node:internal/process/task_queues:96:5)
