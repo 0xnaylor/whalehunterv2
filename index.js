@@ -2,7 +2,7 @@ import { Fetcher, Token, WETH, TokenAmount, Route, Trade, TradeType, Percent } f
 import { ethers } from "ethers";
 import { logger, extractPairAddress, initEnvironment, currencyFormatter, getCurrentEthPrice, getTokenDetails } from './utils/utils.js';
 import { getPairContract, getRecipientAccount } from './utils/contracts.js'
-import { buy } from './transactions.js';
+import { buy, monitorPrice, sellTokens } from './transactions.js';
 import config from './config.js'
 import * as dotenv from 'dotenv'
 dotenv.config()
@@ -10,7 +10,8 @@ dotenv.config()
 let pairAddress, pairContract, ethUsdPrice
 
 // WETH - UNI Ropsten V2 pool
-const url = "https://www.dextools.io/app/ether/pair-explorer/0x4E99615101cCBB83A462dC4DE2bc1362EF1365e5"
+// const url = "https://www.dextools.io/app/ether/pair-explorer/0x4E99615101cCBB83A462dC4DE2bc1362EF1365e5"
+const url = "https://www.dextools.io/app/ether/pair-explorer/0x7b2A5f8956fF62b26aC87F22165F75185e2aD639"
 
 async function main() {
 
@@ -78,12 +79,15 @@ async function main() {
   const tradeValueHex = ethers.BigNumber.from(tradeValue.toString()).toHexString();
   const currentGasPrice = await provider.getGasPrice()
   const txGasPrice = currentGasPrice.add(50000000000) // add 50 gwei
+  const executionPrice = trade.executionPrice.invert().toSignificant(6)
 
-  logger.info(`Execution Price: ${currencyFormatter.format(trade.executionPrice.invert().toSignificant(6)*ethUsdPrice)} per UNI`); // uni per wrapped eth
+  logger.info(`Execution Price: ${currencyFormatter.format(executionPrice*ethUsdPrice)} per UNI`); // uni per wrapped eth
   logger.info("Price Impact: " + trade.priceImpact.toSignificant(6) + "%");
 
   // execute our trade
-  await buy(txGasPrice, chainId, tradeValueHex, amountOutMinHex, path, to, deadline);
+  const tokensRecieved = await buy(txGasPrice, chainId, tradeValueHex, amountOutMinHex, path, to, deadline, altcoin, ethUsdPrice);
+  await monitorPrice(executionPrice, tokensRecieved, ethUsdPrice, altcoin, chainId)
+  await sellTokens()
 
 }
 

@@ -72,3 +72,12 @@ export async function getTokenDetails(chainId, tokenAddress) {
     const tokenDecimals = await tokenContract.decimals();
     return [ tokenName, tokenSymbol, tokenDecimals ];
 }
+
+export function delay(delayInms) {
+    logger.info(`Waiting ${delayInms/1000} seconds`)
+    return new Promise(resolve => {
+      setTimeout(() => {
+        resolve(2);
+      }, delayInms);
+    });
+  }

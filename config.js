@@ -6,7 +6,7 @@ const config = {
     GAS_PRICE_LIMIT: 125000000000, // 125 gwei
     SLIPPAGE_PERCENTAGE: '22',
     GAS_LIMIT: 500000,
-    STOPLOSS: 15,
+    STOPLOSS: 0.992,
     PRICE_CHECK_INTERVAL: 1000 * 5, // 5 seconds
     ROPSTEN_PK: process.env['ROPSTEN_PK'],
     MAINNET_PK: process.env['MAINNET_PK'],
